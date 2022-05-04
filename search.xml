@@ -1,6 +1,188 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title>多线程及锁</title>
+    <url>/2022/05/04/%E5%A4%9A%E7%BA%BF%E7%A8%8B%E5%8F%8A%E9%94%81/</url>
+    <content><![CDATA[<h3 id="多线程"><a href="#多线程" class="headerlink" title="多线程"></a>多线程</h3><h4 id="1-同步、异步、并发、串行"><a href="#1-同步、异步、并发、串行" class="headerlink" title="1.同步、异步、并发、串行"></a>1.同步、异步、并发、串行</h4><p><strong>同步和异步决定能否开启新的线程</strong></p>
+<p>同步： 在当前线程中执行任务，不具备开启新线程的能力</p>
+<p>异步：在新的线程中执行任务，具备开启新线程的能力</p>
+<p>并发和串行主要影响任务的执行方式</p>
+<p>并发：多个任务并发（同时）执行</p>
+<p>串行：一个任务执行完毕后，再执行下一个任务</p>
+<span id="more"></span>
+
+<table>
+<thead>
+<tr>
+<th></th>
+<th>并发队列</th>
+<th>手动创建串行队列</th>
+<th>主队列</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>同步(sync)</td>
+<td>没有开启新线程<br />串行执行任务</td>
+<td>没有开启新线程<br />串行执行任务</td>
+<td>没有开启新线程<br />串行执行任务</td>
+</tr>
+<tr>
+<td>异步(async)</td>
+<td>开启新线程<br />并发执行任务</td>
+<td>开启新线程<br />串行执行任务</td>
+<td>没有开启新线程<br />串行执行任务</td>
+</tr>
+</tbody></table>
+<p><strong>使用sync函数往当前串行队列中添加任务，会卡住当前的串行队列（产生死锁）</strong></p>
+<h4 id="2-队列组"><a href="#2-队列组" class="headerlink" title="2.队列组"></a>2.队列组</h4><p>使用队列组实现以下功能：等任务1、任务2都执行完毕后，再回到主线程执行任务3</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">// 创建队列组</span><br><span class="line">    dispatch_group_t group = dispatch_group_create();</span><br><span class="line">    // 创建并发队列</span><br><span class="line">    dispatch_queue_t queue = dispatch_queue_create(&quot;my_queue&quot;, DISPATCH_QUEUE_CONCURRENT);</span><br><span class="line">    </span><br><span class="line">    // 添加异步任务</span><br><span class="line">    dispatch_group_async(group, queue, ^&#123;</span><br><span class="line">        for (int i = 0; i &lt; 5; i++) &#123;</span><br><span class="line">            NSLog(@&quot;任务1-%@&quot;, [NSThread currentThread]);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;);</span><br><span class="line">    </span><br><span class="line">    dispatch_group_async(group, queue, ^&#123;</span><br><span class="line">        for (int i = 0; i &lt; 5; i++) &#123;</span><br><span class="line">            NSLog(@&quot;任务2-%@&quot;, [NSThread currentThread]);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;);</span><br><span class="line">	// 等前面的任务执行完毕后，会自动执行这个任务</span><br><span class="line">	 dispatch_group_notify(group, dispatch_get_main_queue(), ^&#123;</span><br><span class="line">        for (int i = 0; i &lt; 5; i++) &#123;</span><br><span class="line">            NSLog(@&quot;任务3-%@&quot;, [NSThread currentThread]);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;);</span><br></pre></td></tr></table></figure>
+
+
+
+<h4 id="3-锁"><a href="#3-锁" class="headerlink" title="3.锁"></a>3.锁</h4><p>多线程中当多个线程同时访问同一块资源的时候，就容易引起数据错乱和数据安全问题</p>
+<h5 id="1-OSSpinLock"><a href="#1-OSSpinLock" class="headerlink" title="(1).OSSpinLock"></a>(1).OSSpinLock</h5><p>OSSpinLock叫做”自旋锁”，等待锁的线程会处于忙等（busy-wait）状态，一直占用着CPU资源</p>
+<p><strong>存在问题：</strong></p>
+<ol>
+<li><p>目前已经不再安全，可能会出现优先级反转问题</p>
+</li>
+<li><p>如果等待锁的线程优先级较高，它会一直占用着CPU资源，优先级低的线程就无法释放锁</p>
+</li>
+</ol>
+<p>当多个线程优先级不同的时候，同时调用同一方法，当优先级低的线程先调用这个方法的时候，就会进行加锁，优先级高的进来发现已经加锁了，而CPU会对优先级高的分配的时间片多，这时CPU会从优先级低的切换到优先级高的线程执行，而优先级低的线程没执行完，所以没解锁，优先级高的就会一直访问是否解锁，所以就会一直卡着</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">// 初始化</span><br><span class="line">OSSpinLock lock = OS_SPINLOCK_INIT;</span><br><span class="line">// 加锁</span><br><span class="line">OSSpinLockLock(&amp;lock1);</span><br><span class="line">// 解锁</span><br><span class="line">OSSpinLockUnlock(&amp;lock1);</span><br><span class="line"></span><br><span class="line">//还有一种尝试加锁,能加锁就加，不能就直接跳过执行之后代码</span><br><span class="line">bool result = OSSpinLockTry(&amp;lock)</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h5 id="2-os-unfair-lock"><a href="#2-os-unfair-lock" class="headerlink" title="(2).os_unfair_lock"></a>(2).os_unfair_lock</h5><ol>
+<li>os_unfair_lock用于取代不安全的OSSpinLock ，从iOS10开始才支持</li>
+<li>从底层调用看，等待os_unfair_lock锁的线程会处于休眠状态，并非忙等</li>
+<li>需要导入头文件#import &lt;os/lock.h&gt;</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">//初始化</span><br><span class="line">os_unfair_loc lock = OS_UNFAIR_LOCK_INIT;</span><br><span class="line">// 尝试加锁</span><br><span class="line">os_unfair_lock_trylock(&amp;lock)</span><br><span class="line">// 加锁</span><br><span class="line">os_unfair_lock_lock(&amp;lock);</span><br><span class="line">// 解锁</span><br><span class="line">os_unfair_lock_unlock(&amp;lock);</span><br></pre></td></tr></table></figure>
+
+<h5 id="3-pthread-mutex（互斥锁、递归锁）"><a href="#3-pthread-mutex（互斥锁、递归锁）" class="headerlink" title="(3).pthread_mutex（互斥锁、递归锁）"></a>(3).pthread_mutex（互斥锁、递归锁）</h5><ol>
+<li>mutex叫做”互斥锁”，等待锁的线程会处于休眠状态</li>
+<li>n需要导入头文件#import &lt;pthread.h&gt;</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line"> /*</span><br><span class="line"> 锁的属性的设置</span><br><span class="line"> Mutex type attributes</span><br><span class="line"> */</span><br><span class="line">#define PTHREAD_MUTEX_NORMAL		0</span><br><span class="line">#define PTHREAD_MUTEX_ERRORCHECK	1</span><br><span class="line">#define PTHREAD_MUTEX_RECURSIVE		2 // 递归锁，允许同一个线程对一把锁进行重复加锁</span><br><span class="line">#define PTHREAD_MUTEX_DEFAULT		PTHREAD_MUTEX_NORMAL  </span><br><span class="line"></span><br><span class="line">// 初始化属性</span><br><span class="line">pthread_mutexattr_t attr;</span><br><span class="line">pthread_mutexattr_init(&amp;attr);</span><br><span class="line">pthread_mutexattr_settype(&amp;attr, PTHREAD_MUTEX_DEFAULT);</span><br><span class="line">// 初始化锁</span><br><span class="line">pthread_mutex_t mutex</span><br><span class="line">pthread_mutex_init(mutex, &amp;attr);</span><br><span class="line">// 加锁</span><br><span class="line">pthread_mutex_lock(&amp;mutex);</span><br><span class="line">// 解锁</span><br><span class="line">pthread_mutex_unlock(&amp;mutex);</span><br><span class="line">// 销毁相关资源</span><br><span class="line">pthread_mutexattr_destroy(&amp;attr);</span><br><span class="line">pthread_mutex_destroy(&amp;mutex);</span><br></pre></td></tr></table></figure>
+
+<h5 id="4-pthread-mutex–-递归锁"><a href="#4-pthread-mutex–-递归锁" class="headerlink" title="(4).pthread_mutex– 递归锁"></a>(4).pthread_mutex– 递归锁</h5><p>和上面的一样，只不过更换一下锁的属性的枚举值</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">// 初始化属性</span><br><span class="line">pthread_mutexattr_t attr;</span><br><span class="line">pthread_mutexattr_init(&amp;attr);</span><br><span class="line">pthread_mutexattr_settype(&amp;attr, PTHREAD_MUTEX_RECURSIVE);</span><br><span class="line">// 初始化锁</span><br><span class="line">pthread_mutex_t mutex</span><br><span class="line">pthread_mutex_init(mutex, &amp;attr);</span><br></pre></td></tr></table></figure>
+
+<h5 id="5-pthread-mutex–-条件"><a href="#5-pthread-mutex–-条件" class="headerlink" title="(5).pthread_mutex– 条件"></a>(5).pthread_mutex– 条件</h5><p>场景：两条线程有依赖关系，一条线程必须等另外一天线程完成才执行相关操作</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">// 初始化锁</span><br><span class="line">pthread_mutex_t mutex;</span><br><span class="line">// NULL代表使用默认属性</span><br><span class="line">pthread_mutex_init(&amp;_mutex, NULL);</span><br><span class="line"></span><br><span class="line">// 初始化条件</span><br><span class="line">pthread_cond_t cond;</span><br><span class="line">pthread_cond_init(&amp;_cond, NULL);</span><br><span class="line"></span><br><span class="line">// 等待条件（符合条件，进入休眠，放开锁；被唤醒后会再次加锁）</span><br><span class="line">pthread_cond_wait(&amp;_cond, &amp;_mutex);</span><br><span class="line"></span><br><span class="line">// 激活一个等待该条件的线程</span><br><span class="line">pthread_cond_signal(&amp;_cond);</span><br><span class="line">// 激活所有等待该条件的线程</span><br><span class="line">pthread_cond_broadcast(&amp;_cond);</span><br><span class="line"></span><br><span class="line">// 销毁资源</span><br><span class="line">pthread_mutex_destroy(&amp;_mutex);</span><br><span class="line">pthread_cond_destroy(&amp;_cond);</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h5 id="6-NSLock"><a href="#6-NSLock" class="headerlink" title="(6).NSLock"></a>(6).NSLock</h5><p><strong>NSLock</strong>是对<strong>pthread_mutex_t</strong>普通锁的封装</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">@interface NSLock : NSObject &lt;NSLocking&gt; &#123;</span><br><span class="line">  //尝试加锁，能加就加</span><br><span class="line">- (BOOL)tryLock;</span><br><span class="line">  //在limit之前一直等待加锁，如果limit之前不能加锁，则返回false，否则返回true</span><br><span class="line">- (BOOL)lockBeforeDate:(NSDate *)limit;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">@protocol NSLocking</span><br><span class="line">- (void)lock;</span><br><span class="line">- (void)unlock;</span><br><span class="line">@end</span><br><span class="line">  </span><br><span class="line">//初始化</span><br><span class="line">  NSLock *lock = [[NSLock alloc] init];</span><br></pre></td></tr></table></figure>
+
+<h5 id="7-NSRecursiveLock"><a href="#7-NSRecursiveLock" class="headerlink" title="(7).NSRecursiveLock"></a>(7).NSRecursiveLock</h5><p>NSRecursiveLock也是对mutex递归锁的封装，API跟NSLock基本一致</p>
+<h5 id="8-NSCondition"><a href="#8-NSCondition" class="headerlink" title="(8).NSCondition"></a>(8).NSCondition</h5><p>NSCondition是对mutex和cond的封装</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">@interface NSCondition : NSObject &lt;NSLocking&gt; &#123;</span><br><span class="line">- (void)wait;</span><br><span class="line">- (BOOL)waitUntilDate:(NSDate *)limit;</span><br><span class="line">- (void)signal;</span><br><span class="line">- (void)broadcast;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">@protocol NSLocking</span><br><span class="line">- (void)lock;</span><br><span class="line">- (void)unlock;</span><br><span class="line">@end</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h5 id="9-NSConditionLock"><a href="#9-NSConditionLock" class="headerlink" title="(9).NSConditionLock"></a>(9).NSConditionLock</h5><p>NSConditionLock是对NSCondition的进一步封装，可以设置具体的条件值</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">@interface NSConditionLock : NSObject &lt;NSLocking&gt; &#123;</span><br><span class="line">- (instancetype)initWithCondition:(NSInteger)condition NS_DESIGNATED_INITIALIZER;</span><br><span class="line">@property (readonly) NSInteger condition;</span><br><span class="line">- (void)lockWhenCondition:(NSInteger)condition;</span><br><span class="line">- (BOOL)tryLock;</span><br><span class="line">- (BOOL)tryLockWhenCondition:(NSInteger)condition;</span><br><span class="line">- (void)unlockWithCondition:(NSInteger)condition;</span><br><span class="line">- (BOOL)lockBeforeDate:(NSDate *)limit;</span><br><span class="line">- (BOOL)lockWhenCondition:(NSInteger)condition beforeDate:(NSDate *)limit;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h5 id="10-dispatch-queue"><a href="#10-dispatch-queue" class="headerlink" title="(10).dispatch_queue"></a>(10).dispatch_queue</h5><p>直接使用GCD的串行队列，也是可以实现线程同步的</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">dispatch_queue_t queue = dispatch_queue_create(&quot;lock_queue&quot;, DISPATCH_QUEUE_SERIAL);</span><br><span class="line">dispatch_sync(queue, ^&#123;</span><br><span class="line">       // 任务</span><br><span class="line">    &#125;);</span><br></pre></td></tr></table></figure>
+
+<h5 id="11-dispatch-semaphore"><a href="#11-dispatch-semaphore" class="headerlink" title="(11).dispatch_semaphore"></a>(11).dispatch_semaphore</h5><ol>
+<li><p>semaphore叫做”信号量”</p>
+</li>
+<li><p>信号量的初始值，可以用来控制线程并发访问的最大数量</p>
+</li>
+<li><p>信号量的初始值为1，代表同时只允许1条线程访问资源，保证线程同步</p>
+</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">// 信号量的初始值</span><br><span class="line">int value = 1;</span><br><span class="line">// 初始化信号量</span><br><span class="line">dispatch_semaphore_t semaphore = dispatch_semaphore_create(value);</span><br><span class="line">// 如果信号量的值&lt;=0，当前线程就会进入休眠等待（知道信号量的值&gt;0）</span><br><span class="line">// 如果信号量的值&gt;0,就减一，然后往下执行代码</span><br><span class="line">dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);</span><br><span class="line">// 让信号量的值加一</span><br><span class="line">dispatch_semaphore_signal(semaphore);</span><br></pre></td></tr></table></figure>
+
+<h5 id="12-synchronized"><a href="#12-synchronized" class="headerlink" title="(12).@synchronized"></a>(12).@synchronized</h5><ol>
+<li><p>@synchronized是对mutex递归锁的封装</p>
+</li>
+<li><p>源码查看：objc4中的objc-sync.mm文件</p>
+</li>
+<li><p>@synchronized(obj)内部会生成obj对应的递归锁，然后进行加锁、解锁操作</p>
+</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">@synchronized(obj) &#123;</span><br><span class="line">        // 任务</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<h5 id="自旋锁、互斥锁比较"><a href="#自旋锁、互斥锁比较" class="headerlink" title="自旋锁、互斥锁比较"></a>自旋锁、互斥锁比较</h5><p><strong>什么情况使用自旋锁比较划算？</strong></p>
+<ol>
+<li><p>预计线程等待锁的时间很短</p>
+</li>
+<li><p>加锁的代码（临界区）经常被调用，但竞争情况很少发生</p>
+</li>
+<li><p>CPU资源不紧张</p>
+</li>
+<li><p>多核处理器</p>
+</li>
+</ol>
+<p><strong>什么情况使用互斥锁比较划算？</strong></p>
+<p>预计线程等待锁的时间较长</p>
+<ol start="2">
+<li><p>单核处理器</p>
+</li>
+<li><p>临界区有IO操作</p>
+</li>
+<li><p>临界区代码复杂或者循环量大</p>
+</li>
+<li><p>临界区竞争非常激烈</p>
+</li>
+</ol>
+<h5 id="iOS线程同步方案性能比较（性能从高到低排序）"><a href="#iOS线程同步方案性能比较（性能从高到低排序）" class="headerlink" title="iOS线程同步方案性能比较（性能从高到低排序）"></a>iOS线程同步方案性能比较（性能从高到低排序）</h5><p>os_unfair_lock <strong>&gt;</strong> OSSpinLock <strong>&gt;</strong> dispatch_semaphore <strong>&gt;</strong> pthread_mutex <strong>&gt;</strong> dispatch_queue(DISPATCH_QUEUE_SERIAL) <strong>&gt;</strong> NSLock <strong>&gt;</strong> NSCondition <strong>&gt;</strong> pthread_mutex(recursive) <strong>&gt;</strong> NSRecursiveLock <strong>&gt;</strong> NSConditionLock <strong>&gt;</strong> @synchronized</p>
+]]></content>
+      <tags>
+        <tag>多线程</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>load和initialize</title>
+    <url>/2022/05/01/load%E5%92%8Cinitialize/</url>
+    <content><![CDATA[<p><strong>load</strong></p>
+<ol>
+<li><p>load方法会在runtime加载类、分类的时候调用</p>
+</li>
+<li><p>每个类和分类的load方法在程序运行过程中只调用一次</p>
+<span id="more"></span></li>
+<li><p>调用顺序</p>
+<ol>
+<li><p>先调用类的load方法</p>
+<p>按照编译先后顺序调用(先编译，先调用)</p>
+<p>调用子类的load方法之前会先调用父类的load方法(系统内部采用了递归方法，会优先把父类的load方法添加到数组中，然后再是子类本身)</p>
+</li>
+<li><p>再调用分类的load方法</p>
+<p>按照编译先后顺序调用(先编译，后调用)</p>
+</li>
+</ol>
+</li>
+</ol>
+<p>runtime运行的时候内部会直接优先调用所有类的load方法，然后再调用所有分类的load方法，而我们平时写的类方法是通过消息机制来调用方法的，所以流程通过isa找到对应的对象，然后在方法列表中对应查找；+load方法是根据方法地址直接调用的，并不是经过obj_msgSend函数调用的</p>
+<figure class="highlight objc"><table><tr><td class="code"><pre><span class="line"><span class="comment">//系统会调用一个函数拿到所有类的列表，把所有类的load方法结构体存到一个数组中，把所有分类load方法结构体存到另一个数组中，runtime运行的时候就会调用加载load模块的方法，在方法内部会优先调用类的load方法，然后是分类的</span></span><br><span class="line"><span class="comment">// 存储类load方法的结构体</span></span><br><span class="line">Struct loadable_class &#123;</span><br><span class="line">  Class cls;	<span class="comment">//may be nil</span></span><br><span class="line">  IMP method;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 存储分类load方法的结构体</span></span><br><span class="line">Struct loadable_category &#123;</span><br><span class="line">  Category cat;	<span class="comment">//may be nil</span></span><br><span class="line">  IMP method;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+<p><strong>+initialize</strong></p>
+<ol>
+<li>类第一次接收到消息的时候调用</li>
+<li>调用子类的+initialize会先调用父类的+initialize</li>
+<li>如果子类没有实现+initialize，则会调用父类的+initialize，所以父类的+initialize有可能会被调用多次</li>
+</ol>
+<p><strong>作用：</strong>第一次调用这个类的时候想做一些事情可以在+initialize方法里面处理</p>
+<p>在查找方法的函数里面会判断这个类有没有初始化，如果没有先执行初始化，并且内部采用递归方法，先调用父类的初始化方法，在调用自己的初始化方法，完成之后继续查找刚才那个方法</p>
+<p><strong>load和initialize的区别？</strong></p>
+<ol>
+<li><p>load是根据函数地址直接调用的；initialize是通过objc_msgSend调用</p>
+</li>
+<li><p>load是runtime加载类、分类的时候调用(只会调用一次)；initialize是类第一次接收到消息的时候调用，每个类只会initialize一次(父类的+initialize可能会被多次调用)</p>
+</li>
+<li><p>上面总结的</p>
+</li>
+</ol>
+]]></content>
+      <tags>
+        <tag>123</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>Swift方法派发机制</title>
     <url>/2022/04/28/Swift%E6%96%B9%E6%B3%95%E6%B4%BE%E5%8F%91%E6%9C%BA%E5%88%B6/</url>
     <content><![CDATA[<h2 id="Swift方法派发机制"><a href="#Swift方法派发机制" class="headerlink" title="Swift方法派发机制"></a>Swift方法派发机制</h2><p>方法派发机制是程序判断如何去调用函数或方法的机制，每次调用方法时都会触发，了解派发机制的工作原理，对于写出高性能的代码来说非常重要，派发机制也能解释一些Swift中的奇怪的现象，和Objective-C中的黑魔法。</p>
@@ -90,55 +272,5 @@
       <categories>
         <category>Swift集合</category>
       </categories>
-  </entry>
-  <entry>
-    <title>load和initialize</title>
-    <url>/2022/05/01/load%E5%92%8Cinitialize/</url>
-    <content><![CDATA[<p><strong>load</strong></p>
-<ol>
-<li><p>load方法会在runtime加载类、分类的时候调用</p>
-</li>
-<li><p>每个类和分类的load方法在程序运行过程中只调用一次</p>
-<span id="more"></span></li>
-<li><p>调用顺序</p>
-<ol>
-<li><p>先调用类的load方法</p>
-<p>按照编译先后顺序调用(先编译，先调用)</p>
-<p>调用子类的load方法之前会先调用父类的load方法(系统内部采用了递归方法，会优先把父类的load方法添加到数组中，然后再是子类本身)</p>
-</li>
-<li><p>再调用分类的load方法</p>
-<p>按照编译先后顺序调用(先编译，后调用)</p>
-</li>
-</ol>
-</li>
-</ol>
-<p>runtime运行的时候内部会直接优先调用所有类的load方法，然后再调用所有分类的load方法，而我们平时写的类方法是通过消息机制来调用方法的，所以流程通过isa找到对应的对象，然后在方法列表中对应查找；+load方法是根据方法地址直接调用的，并不是经过obj_msgSend函数调用的</p>
-<figure class="highlight objc"><table><tr><td class="code"><pre><span class="line"><span class="comment">//系统会调用一个函数拿到所有类的列表，把所有类的load方法结构体存到一个数组中，把所有分类load方法结构体存到另一个数组中，runtime运行的时候就会调用加载load模块的方法，在方法内部会优先调用类的load方法，然后是分类的</span></span><br><span class="line"><span class="comment">// 存储类load方法的结构体</span></span><br><span class="line">Struct loadable_class &#123;</span><br><span class="line">  Class cls;	<span class="comment">//may be nil</span></span><br><span class="line">  IMP method;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 存储分类load方法的结构体</span></span><br><span class="line">Struct loadable_category &#123;</span><br><span class="line">  Category cat;	<span class="comment">//may be nil</span></span><br><span class="line">  IMP method;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-
-
-<p><strong>+initialize</strong></p>
-<ol>
-<li>类第一次接收到消息的时候调用</li>
-<li>调用子类的+initialize会先调用父类的+initialize</li>
-<li>如果子类没有实现+initialize，则会调用父类的+initialize，所以父类的+initialize有可能会被调用多次</li>
-</ol>
-<p><strong>作用：</strong>第一次调用这个类的时候想做一些事情可以在+initialize方法里面处理</p>
-<p>在查找方法的函数里面会判断这个类有没有初始化，如果没有先执行初始化，并且内部采用递归方法，先调用父类的初始化方法，在调用自己的初始化方法，完成之后继续查找刚才那个方法</p>
-<p><strong>load和initialize的区别？</strong></p>
-<ol>
-<li><p>load是根据函数地址直接调用的；initialize是通过objc_msgSend调用</p>
-</li>
-<li><p>load是runtime加载类、分类的时候调用(只会调用一次)；initialize是类第一次接收到消息的时候调用，每个类只会initialize一次(父类的+initialize可能会被多次调用)</p>
-</li>
-<li><p>上面总结的</p>
-</li>
-</ol>
-]]></content>
-      <tags>
-        <tag>123</tag>
-      </tags>
   </entry>
 </search>

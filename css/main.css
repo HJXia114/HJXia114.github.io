@@ -217,7 +217,7 @@ h6 {
   font-size: 0.875em;
 }
 p {
-  margin: 0 0 20px 0;
+  margin: 0 0 10px 0;
 }
 a,
 span.exturl {
@@ -1225,7 +1225,7 @@ pre .javascript .function {
 }
 .links-of-author a::before,
 .links-of-author span.exturl::before {
-  background: #cd0bc6;
+  background: #5965ff;
   border-radius: 50%;
   content: ' ';
   display: inline-block;
@@ -1471,6 +1471,7 @@ pre .javascript .function {
   color: #ff0000;
   display: inline-block;
   margin: 0 5px;
+  animation: iconAnimate 1.33s ease-in-out infinite;
 }
 .powered-by,
 .theme-info {
@@ -1551,10 +1552,7 @@ pre .javascript .function {
   position: fixed;
   transition-property: bottom;
   z-index: 1300;
-  width: 24px;
-}
-.back-to-top span {
-  display: none;
+  width: initial;
 }
 .back-to-top:hover {
   color: #fc6423;
@@ -1567,16 +1565,6 @@ pre .javascript .function {
     left: 20px;
     opacity: 0.8;
   }
-}
-.reading-progress-bar {
-  background: #37c6c0;
-  display: block;
-  height: 3px;
-  left: 0;
-  position: fixed;
-  width: 0;
-  z-index: 1500;
-  top: 0;
 }
 .post-body {
   font-family: 'Lato', "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -2001,7 +1989,7 @@ pre .javascript .function {
 .reward-container button {
   background: transparent;
   border: 1px solid #fc6423;
-  border-radius: 0;
+  border-radius: 5px;
   color: #fc6423;
   cursor: pointer;
   line-height: 2;
@@ -2720,14 +2708,14 @@ ul.breadcrumb li + li:last-child {
   }
 }
 body {
-  background: url("https://pic.heson10.com/img/image-20200712231958010.png");
+  background: url("/images/background.jpg");
   background-repeat: no-repeat;
   background-attachment: fixed;
   background-size: cover;
   background-position: 50% 50%;
 }
 .content-wrap {
-  opacity: 0.9;
+  background: rgba(255,255,255,0.9) none repeat scroll !important;
 }
 .sidebar {
   opacity: 0.9;
